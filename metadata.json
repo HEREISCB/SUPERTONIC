@@ -1,0 +1,7 @@
+{
+  "name": "Supertonic Voice Studio",
+  "description": "A professional-grade AI voice synthesis platform inspired by Supertonic 2, powered by Gemini 2.5 Flash TTS for expressive, multi-speaker vocal performance.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
