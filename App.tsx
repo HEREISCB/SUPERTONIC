@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VOICES, APP_CONFIG } from './constants';
 import { VoiceName, GeneratedAudio, SpeakerConfig, EngineType } from './types';
 import { VoiceCard } from './components/VoiceCard';
@@ -19,6 +19,10 @@ const App: React.FC = () => {
   const [mode, setMode] = useState<'single' | 'multi'>('single');
   const [isCheerfully, setIsCheerfully] = useState(false);
 
+  // Mixed content warning state
+  const isHttps = window.location.protocol === 'https:';
+  const isMixedContent = isHttps && pocketEndpoint.startsWith('http://localhost');
+
   // Multi-speaker state
   const [multiConfig, setMultiConfig] = useState<{
     speaker1: SpeakerConfig;
@@ -34,11 +38,8 @@ const App: React.FC = () => {
 
   const handleEngineChange = (newEngine: EngineType) => {
     setEngine(newEngine);
-    // Reset selection to first available voice for that engine
     const firstVoice = VOICES.find(v => v.engine === newEngine);
     if (firstVoice) setSelectedVoice(firstVoice.id);
-    
-    // Force single mode if Pocket TTS (assuming multi-speaker not implemented in mock backend)
     if (newEngine === 'pocket') setMode('single');
   };
 
@@ -64,12 +65,7 @@ const App: React.FC = () => {
           });
         }
       } else {
-        // Pocket TTS Logic
-        if (mode === 'single') {
-            result = await synthesizePocketSpeech(inputText, selectedVoice, pocketEndpoint);
-        } else {
-            throw new Error("Conversation mode not supported for Pocket TTS yet.");
-        }
+        result = await synthesizePocketSpeech(inputText, selectedVoice, pocketEndpoint);
       }
 
       const newAudio: GeneratedAudio = {
@@ -93,7 +89,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#050505]">
-      {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-950/50 sticky top-0 z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -134,10 +129,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8 flex flex-col lg:flex-row gap-8">
-        {/* Sidebar / Configuration */}
         <div className="lg:w-80 flex flex-col gap-6">
-          
-          {/* Engine Selector */}
           <section className="bg-zinc-900/40 p-1 rounded-xl border border-zinc-800 flex">
             <button 
               onClick={() => handleEngineChange('gemini')}
@@ -175,54 +167,43 @@ const App: React.FC = () => {
           <section className="bg-zinc-900/40 p-5 rounded-2xl border border-zinc-800">
             <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4">Properties</h2>
             <div className="space-y-4">
-              {engine === 'gemini' && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-400">Expressive Tone</span>
-                  <button 
-                    onClick={() => setIsCheerfully(!isCheerfully)}
-                    className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
-                      isCheerfully ? 'bg-emerald-500' : 'bg-zinc-800'
-                    }`}
-                  >
-                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                      isCheerfully ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
-              )}
-              
               {engine === 'pocket' && (
                 <div className="space-y-2">
-                  <label className="text-xs text-zinc-400">Backend URL</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs text-zinc-400">Backend URL</label>
+                    {isMixedContent && (
+                      <span className="text-[10px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20">HTTPS Warning</span>
+                    )}
+                  </div>
                   <input 
                     type="text" 
                     value={pocketEndpoint}
                     onChange={(e) => setPocketEndpoint(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 font-mono focus:border-orange-500 outline-none"
+                    className={`w-full bg-zinc-950 border rounded px-2 py-1 text-xs text-zinc-300 font-mono focus:border-orange-500 outline-none transition-colors ${isMixedContent ? 'border-amber-500/50' : 'border-zinc-800'}`}
                   />
+                  {isMixedContent && (
+                    <p className="text-[10px] text-amber-500/80 leading-tight">
+                      Browser will block requests from HTTPS to HTTP localhost. Use an HTTPS tunnel for your backend.
+                    </p>
+                  )}
                 </div>
               )}
-
               <div className="flex items-center justify-between">
-                <span className="text-xs text-zinc-400">Format</span>
-                <span className={`text-xs font-mono ${engine === 'gemini' ? 'text-emerald-400' : 'text-orange-400'}`}>WAV</span>
+                <span className="text-xs text-zinc-400">Environment</span>
+                <span className="text-[10px] font-mono text-zinc-500">
+                  {window.location.hostname.includes('cloudflare') ? 'Cloudflare Tunnel' : 'Local'}
+                </span>
               </div>
             </div>
           </section>
         </div>
 
-        {/* Main Console */}
         <div className="flex-1 flex flex-col gap-8">
           <section className="bg-zinc-900/60 rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden">
             <div className="p-1 border-b border-zinc-800 bg-zinc-950/40 flex items-center justify-between px-6 h-12">
               <span className="text-[10px] font-bold text-zinc-600 tracking-widest uppercase">
                 Studio Console / {mode === 'single' ? 'Script' : 'Dialogue'}
               </span>
-              <div className="flex gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-zinc-800" />
-                <div className="w-2 h-2 rounded-full bg-zinc-800" />
-                <div className="w-2 h-2 rounded-full bg-zinc-800" />
-              </div>
             </div>
 
             <div className="p-6">
@@ -231,8 +212,8 @@ const App: React.FC = () => {
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder={engine === 'gemini' 
-                    ? "Enter text to synthesize... Try something like 'Hello! Welcome to the Supertonic Voice Studio.'"
-                    : "Enter text for Pocket TTS... Ensure your backend is running."
+                    ? "Enter text to synthesize..."
+                    : "Enter text for Pocket TTS..."
                   }
                   className="w-full h-48 bg-transparent text-zinc-100 placeholder-zinc-700 resize-none focus:outline-none text-lg leading-relaxed font-light"
                 />
@@ -245,15 +226,8 @@ const App: React.FC = () => {
                         type="text" 
                         value={multiConfig.speaker1.name}
                         onChange={(e) => setMultiConfig(prev => ({ ...prev, speaker1: { ...prev.speaker1, name: e.target.value } }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:border-zinc-700 outline-none"
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300"
                       />
-                      <select 
-                        value={multiConfig.speaker1.voice}
-                        onChange={(e) => setMultiConfig(prev => ({ ...prev, speaker1: { ...prev.speaker1, voice: e.target.value as VoiceName } }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:border-zinc-700 outline-none"
-                      >
-                        {availableVoices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                      </select>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase">Speaker 2</label>
@@ -261,38 +235,29 @@ const App: React.FC = () => {
                         type="text" 
                         value={multiConfig.speaker2.name}
                         onChange={(e) => setMultiConfig(prev => ({ ...prev, speaker2: { ...prev.speaker2, name: e.target.value } }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:border-zinc-700 outline-none"
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300"
                       />
-                      <select 
-                        value={multiConfig.speaker2.voice}
-                        onChange={(e) => setMultiConfig(prev => ({ ...prev, speaker2: { ...prev.speaker2, voice: e.target.value as VoiceName } }))}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs text-zinc-300 focus:border-zinc-700 outline-none"
-                      >
-                        {availableVoices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                      </select>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase">Dialogue (Format: Name: Text)</label>
-                    <textarea
-                      value={multiConfig.conversation}
-                      onChange={(e) => setMultiConfig(prev => ({ ...prev, conversation: e.target.value }))}
-                      className="w-full h-40 bg-transparent text-zinc-100 placeholder-zinc-700 resize-none focus:outline-none text-base border-t border-zinc-800 pt-4"
-                      placeholder="Joe: Hi! How are you?&#10;Jane: I'm great! This studio is amazing."
-                    />
-                  </div>
+                  <textarea
+                    value={multiConfig.conversation}
+                    onChange={(e) => setMultiConfig(prev => ({ ...prev, conversation: e.target.value }))}
+                    className="w-full h-40 bg-transparent text-zinc-100 placeholder-zinc-700 resize-none focus:outline-none text-base border-t border-zinc-800 pt-4"
+                  />
                 </div>
               )}
 
               <div className="mt-6 flex flex-col sm:flex-row items-center gap-4 border-t border-zinc-800 pt-6">
                 <div className="flex-1">
                   {error && (
-                    <p className="text-rose-500 text-xs font-medium flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      {error}
-                    </p>
+                    <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+                      <p className="text-rose-500 text-xs font-medium flex items-start gap-2">
+                        <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        {error}
+                      </p>
+                    </div>
                   )}
                 </div>
                 
@@ -305,23 +270,7 @@ const App: React.FC = () => {
                       : 'bg-white text-black hover:bg-zinc-200 active:scale-95 shadow-white/10'
                   }`}
                 >
-                  {isSynthesizing ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 100-16 8 8 0 000 16z" />
-                      </svg>
-                      Synthesize
-                    </>
-                  )}
+                  {isSynthesizing ? 'Processing...' : 'Synthesize'}
                 </button>
               </div>
             </div>
@@ -336,19 +285,6 @@ const App: React.FC = () => {
           </section>
         </div>
       </main>
-
-      <footer className="border-t border-zinc-900 bg-zinc-950 py-8 px-4 mt-auto">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-zinc-600 text-xs">
-            © 2025 Supertonic Voice Studio. 
-          </p>
-          <div className="flex gap-6 text-zinc-600 text-[10px] font-bold uppercase tracking-widest">
-            <a href="#" className="hover:text-zinc-400">Documentation</a>
-            <a href="#" className="hover:text-zinc-400">API Access</a>
-            <a href="#" className="hover:text-zinc-400">Privacy Policy</a>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

@@ -19,6 +19,7 @@ export const synthesizeSpeech = async (
   voice: VoiceName,
   isCheerfully: boolean = false
 ): Promise<{ blobUrl: string; duration: number }> => {
+  // Access process.env.API_KEY directly at runtime
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const prompt = isCheerfully ? `Say cheerfully: ${text}` : text;
